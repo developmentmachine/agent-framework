@@ -1,0 +1,31 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "agent-framework"
+version = "0.1.0"
+description = "Universal agent framework for Python"
+requires-python = ">=3.11"
+dependencies = [
+  "pydantic>=2.10.0",
+  "typer>=0.15.0",
+  "httpx>=0.28.0",
+  "websockets>=14.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.3.0",
+  "pytest-asyncio>=0.25.0",
+]
+
+[project.scripts]
+agent-framework = "agent_framework.cli.main:app"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/agent_framework"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

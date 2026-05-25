@@ -1,0 +1,16 @@
+{
+  "name": "echo-agent-example",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node --import tsx src/index.ts"
+  },
+  "dependencies": {
+    "@agent-framework/core": "workspace:*",
+    "@agent-framework/providers": "workspace:*"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.2"
+  }
+}

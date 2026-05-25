@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-framework.dev/spec/protocol/gateway-frame.schema.json",
+  "title": "GatewayFrame",
+  "oneOf": [
+    {
+      "type": "object",
+      "required": ["type", "id", "method", "params"],
+      "properties": {
+        "type": { "const": "req" },
+        "id": { "type": "string" },
+        "method": { "type": "string" },
+        "params": { "type": "object" }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": ["type", "id", "ok"],
+      "properties": {
+        "type": { "const": "res" },
+        "id": { "type": "string" },
+        "ok": { "type": "boolean" },
+        "payload": {},
+        "error": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": ["type", "event", "payload"],
+      "properties": {
+        "type": { "const": "event" },
+        "event": { "type": "string" },
+        "payload": {},
+        "seq": { "type": "integer" }
+      },
+      "additionalProperties": false
+    }
+  ]
+}

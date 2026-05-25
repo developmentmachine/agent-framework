@@ -1,0 +1,167 @@
+from __future__ import annotations
+
+import json
+from typing import AsyncIterator
+from uuid import uuid4
+
+from agent_framework.core.contracts import (
+    AgentLoopDeps,
+    AssistantEvent,
+    LifecycleEvent,
+    StreamEvent,
+    ToolEvent,
+    UsageEvent,
+)
+from agent_framework.core.domain import (
+    AgentRunRequest,
+    Message,
+    TextContent,
+    ToolCallContent,
+    ToolCallRequest,
+    ToolExecutionContext,
+    ToolResultContent,
+)
+
+
+class DefaultAgentLoop:
+    def __init__(self, deps: AgentLoopDeps) -> None:
+        self._deps = deps
+
+    async def run(self, request: AgentRunRequest) -> AsyncIterator[StreamEvent]:
+        run_id = str(uuid4())
+        hook_context = {"session_id": request.session_id, "run_id": run_id}
+
+        yield LifecycleEvent(phase="start", run_id=run_id)
+        await self._deps.hooks.emit({"type": "onRunStart", "context": hook_context})
+
+        try:
+            await self._deps.session_store.append_messages(
+                request.session_id,
+                [Message(role="user", content=request.input["content"])],
+            )
+            session = await self._deps.session_store.get(request.session_id)
+            history = list(
+                session.messages
+                if session
+                else [Message(role="user", content=request.input["content"])]
+            )
+
+            for _ in range(self._deps.config.max_turns):
+                _, messages = await self._deps.context_engine.build(
+                    request.session_id,
+                    request.mode,
+                    history,
+                )
+                pending_calls: list[ToolCallRequest] = []
+                assistant_text = ""
+
+                async for chunk in self._deps.provider.stream(messages, self._deps.tools.list()):
+                    if chunk.type == "text_delta" and chunk.text_delta:
+                        assistant_text += chunk.text_delta
+                        yield AssistantEvent(delta=chunk.text_delta)
+                    if chunk.type == "tool_call" and chunk.tool_call:
+                        pending_calls.append(chunk.tool_call)
+                    if chunk.type == "usage" and chunk.usage:
+                        yield UsageEvent(tokens=chunk.usage)
+
+                assistant_message = _build_assistant_message(assistant_text, pending_calls)
+                history.append(assistant_message)
+                await self._deps.session_store.append_messages(request.session_id, [assistant_message])
+
+                if not pending_calls:
+                    await self._deps.hooks.emit({
+                        "type": "onRunEnd",
+                        "context": hook_context,
+                        "reason": {"kind": "completed"},
+                    })
+                    yield LifecycleEvent(phase="end", run_id=run_id)
+                    return
+
+                tool_messages: list[Message] = []
+                for call in pending_calls:
+                    message = None
+                    async for event in self._execute_tool_call(request, run_id, call, hook_context):
+                        if isinstance(event, Message):
+                            message = event
+                        else:
+                            yield event
+                    if message is not None:
+                        tool_messages.append(message)
+                        history.append(message)
+                await self._deps.session_store.append_messages(request.session_id, tool_messages)
+
+            await self._deps.hooks.emit({
+                "type": "onRunEnd",
+                "context": hook_context,
+                "reason": {"kind": "max_turns"},
+            })
+            yield LifecycleEvent(phase="end", run_id=run_id)
+        except Exception as exc:  # noqa: BLE001
+            message = str(exc)
+            await self._deps.hooks.emit({
+                "type": "onRunEnd",
+                "context": hook_context,
+                "reason": {"kind": "error", "message": message},
+            })
+            yield LifecycleEvent(phase="error", run_id=run_id, error=message)
+
+    async def _execute_tool_call(self, request, run_id, call, hook_context):
+        yield ToolEvent(call_id=call.id, name=call.name, status="start")
+        await self._deps.hooks.emit({
+            "type": "preToolUse",
+            "context": hook_context,
+            "tool_name": call.name,
+            "arguments": call.arguments,
+        })
+
+        decision = await self._deps.policy.check(call.name, call.arguments, request.session_id)
+        if decision == "deny":
+            error = f"Permission denied for tool {call.name}"
+            yield ToolEvent(call_id=call.id, name=call.name, status="error", output=error)
+            yield _tool_result_message(call.id, error, True)
+            return
+
+        if decision == "ask":
+            approved = False
+            if self._deps.on_ask_permission:
+                approved = await self._deps.on_ask_permission(
+                    call.name, call.arguments, request.session_id
+                )
+            if not approved:
+                error = f"User denied tool {call.name}"
+                yield ToolEvent(call_id=call.id, name=call.name, status="error", output=error)
+                yield _tool_result_message(call.id, error, True)
+                return
+
+        ctx = ToolExecutionContext(
+            session_id=request.session_id,
+            run_id=run_id,
+            workspace_root=self._deps.config.workspace_root,
+        )
+        output, error = await self._deps.tools.execute(ctx, call)
+        content = error or (output if isinstance(output, str) else json.dumps(output, indent=2))
+        yield ToolEvent(
+            call_id=call.id,
+            name=call.name,
+            status="error" if error else "end",
+            output=content,
+        )
+        yield _tool_result_message(call.id, content, bool(error))
+
+
+def _build_assistant_message(text: str, calls: list[ToolCallRequest]) -> Message:
+    if not calls:
+        return Message(role="assistant", content=text)
+    content = []
+    if text:
+        content.append(TextContent(text=text))
+    for call in calls:
+        content.append(ToolCallContent(id=call.id, name=call.name, arguments=call.arguments))
+    return Message(role="assistant", content=content)
+
+
+def _tool_result_message(tool_call_id: str, content: str, is_error: bool) -> Message:
+    return Message(
+        role="tool",
+        content=[ToolResultContent(tool_call_id=tool_call_id, content=content, is_error=is_error)],
+    )
