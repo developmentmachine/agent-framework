@@ -195,4 +195,5 @@ class AgentLoopDeps:
     hooks: HookRunner
     policy: PermissionPolicy
     config: AgentConfig
+    compactor: object | None = None
     on_ask_permission: Any | None = None

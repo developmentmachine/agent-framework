@@ -2,6 +2,7 @@ import type { AgentConfig, AgentRunRequest, TerminalReason } from './types/domai
 import { DEFAULT_AGENT_CONFIG } from './types/domain.js';
 import type {
   AgentLoop,
+  ContextCompactor,
   ContextEngine,
   EventBus,
   HookRunner,
@@ -16,6 +17,7 @@ import type {
   ToolRegistry,
 } from './types/contracts.js';
 import { DefaultAgentLoop } from './agent-loop.js';
+import { TruncateMiddleCompactor } from './context-compactor.js';
 import { WorkspaceContextEngine } from './context-engine.js';
 import { InMemoryEventBus } from './event-bus.js';
 import { DefaultHookRunner } from './hook-runner.js';
@@ -50,6 +52,7 @@ export interface CreateAgentRuntimeOptions {
   memory?: MemoryProvider;
   hooks?: HookRunner;
   policy?: PermissionPolicy;
+  compactor?: ContextCompactor;
   onAskPermission?: (request: import('./types/domain.js').PermissionCheckRequest) => Promise<boolean>;
 }
 
@@ -67,6 +70,7 @@ export function createAgentRuntime(
   const memory = options.memory ?? new InMemoryMemoryProvider();
   const hooks = options.hooks ?? new DefaultHookRunner();
   const policy = options.policy ?? new DefaultPermissionPolicy(DEFAULT_CODING_POLICY_RULES);
+  const compactor = options.compactor ?? new TruncateMiddleCompactor();
   const contextEngine = new WorkspaceContextEngine({ workspaceRoot: config.workspaceRoot });
   const lane = new DefaultSessionLane();
   const runs = new DefaultRunManager();
@@ -80,6 +84,7 @@ export function createAgentRuntime(
     hooks,
     policy,
     config,
+    compactor,
     onAskPermission: options.onAskPermission,
   });
 

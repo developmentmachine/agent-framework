@@ -131,6 +131,7 @@ export interface AgentLoopDeps {
   hooks: HookRunner;
   policy: PermissionPolicy;
   config: import('./domain.js').AgentConfig;
+  compactor?: ContextCompactor;
   onAskPermission?: (request: PermissionCheckRequest) => Promise<boolean>;
 }
 

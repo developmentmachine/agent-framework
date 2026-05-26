@@ -129,6 +129,7 @@ export interface AgentConfig {
   provider: string;
   toolTimeoutMs: number;
   runTimeoutMs: number;
+  tokenBudget: number;
 }
 
 export const DEFAULT_AGENT_CONFIG: AgentConfig = {
@@ -138,4 +139,5 @@ export const DEFAULT_AGENT_CONFIG: AgentConfig = {
   provider: 'openai',
   toolTimeoutMs: 60_000,
   runTimeoutMs: 600_000,
+  tokenBudget: 100_000,
 };

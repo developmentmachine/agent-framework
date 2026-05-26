@@ -39,6 +39,11 @@ export class DefaultAgentLoop implements AgentLoop {
           return { kind: 'cancelled' };
         }
 
+        if (this.deps.compactor) {
+          const compacted = await this.deps.compactor.compact(history, this.deps.config.tokenBudget);
+          history.splice(0, history.length, ...compacted);
+        }
+
         const context = await this.deps.contextEngine.build({
           sessionId: request.sessionId,
           mode: request.mode,

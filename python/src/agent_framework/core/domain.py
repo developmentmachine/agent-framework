@@ -98,6 +98,7 @@ class AgentConfig:
     provider: str = "openai"
     tool_timeout_ms: int = 60_000
     run_timeout_ms: int = 600_000
+    token_budget: int = 100_000
 
 
 DEFAULT_AGENT_CONFIG = AgentConfig()

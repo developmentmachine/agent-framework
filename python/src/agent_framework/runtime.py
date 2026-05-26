@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 from agent_framework.core.agent_loop import DefaultAgentLoop
 from agent_framework.core.context_engine import WorkspaceContextEngine
+from agent_framework.core.context_compactor import TruncateMiddleCompactor
 from agent_framework.core.contracts import (
     AgentLoop,
     ContextEngine,
@@ -59,6 +60,7 @@ def create_agent_runtime(
     hooks: HookRunner | None = None,
     policy: PermissionPolicy | None = None,
     on_ask_permission=None,
+    compactor=None,
 ) -> AgentRuntime:
     resolved_config = config or DEFAULT_AGENT_CONFIG
     resolved_tools = tools or DefaultToolRegistry()
@@ -67,6 +69,7 @@ def create_agent_runtime(
     resolved_hooks = hooks or DefaultHookRunner()
     resolved_policy = policy or DefaultPermissionPolicy(DEFAULT_CODING_POLICY_RULES)
     context_engine = WorkspaceContextEngine(resolved_config.workspace_root)
+    resolved_compactor = compactor or TruncateMiddleCompactor()
     lane = DefaultSessionLane()
     runs = DefaultRunManager()
     bus = InMemoryEventBus()
@@ -80,6 +83,7 @@ def create_agent_runtime(
             hooks=resolved_hooks,
             policy=resolved_policy,
             config=resolved_config,
+            compactor=resolved_compactor,
             on_ask_permission=on_ask_permission,
         )
     )

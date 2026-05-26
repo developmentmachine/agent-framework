@@ -47,6 +47,8 @@ class DefaultAgentLoop:
             )
 
             for _ in range(self._deps.config.max_turns):
+                if self._deps.compactor:
+                    history = await self._deps.compactor.compact(history, self._deps.config.token_budget)
                 _, messages = await self._deps.context_engine.build(
                     request.session_id,
                     request.mode,
