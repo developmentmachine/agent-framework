@@ -15,7 +15,16 @@ export { MultiAgentRouter, type AgentRouteRule, type RoutedAgentRequest } from '
 export { InMemoryChannelAdapter, type ChannelAdapter, type NormalizedMessage } from './channel-adapter.js';
 export { WebhookSurface } from './webhook-surface.js';
 export { CronScheduler, type CronJob } from './cron-scheduler.js';
-export { InMemoryTelemetryCollector, attachTelemetry, type TelemetryCollector } from './telemetry.js';
+export {
+  InMemoryTelemetryCollector,
+  ConsoleSpanExporter,
+  HttpOtelExporter,
+  attachTelemetry,
+  createTelemetryPipeline,
+  type TelemetryCollector,
+  type SpanExporter,
+  type TelemetryPipeline,
+} from './telemetry.js';
 export { BestOfNOrchestrator, type BestOfNCandidate, type BestOfNResult } from './best-of-n.js';
 
 export { DefaultRunManager } from './run-manager.js';

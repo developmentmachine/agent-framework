@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-import json
 import re
-import subprocess
 from pathlib import Path
 
 from pydantic import BaseModel
 
 from agent_framework.core.domain import ToolDefinition, ToolExecutionContext
+from agent_framework.core.sandbox import LocalSandboxBackend, SandboxResult
 from agent_framework.core.tool_registry import create_pydantic_tool
 
 
@@ -33,6 +32,12 @@ class ShellArgs(BaseModel):
     command: str
 
 
+class BuiltinToolsOptions:
+    def __init__(self, sandbox=None, shell_timeout_ms: int = 60_000) -> None:
+        self.sandbox = sandbox or LocalSandboxBackend()
+        self.shell_timeout_ms = shell_timeout_ms
+
+
 def _resolve(workspace_root: str, target: str) -> Path:
     root = Path(workspace_root).resolve()
     resolved = (root / target).resolve()
@@ -51,12 +56,14 @@ def _walk_files(root: Path, pattern: str) -> list[str]:
     return results
 
 
-def register_builtin_tools(registry) -> None:
-    for tool in create_builtin_tools():
+def register_builtin_tools(registry, options: BuiltinToolsOptions | None = None) -> None:
+    for tool in create_builtin_tools(options):
         registry.register(tool)
 
 
-def create_builtin_tools():
+def create_builtin_tools(options: BuiltinToolsOptions | None = None):
+    resolved = options or BuiltinToolsOptions()
+
     async def read_file(args: ReadFileArgs, ctx: ToolExecutionContext):
         return _resolve(ctx.workspace_root, args.path).read_text(encoding="utf-8")
 
@@ -87,24 +94,17 @@ def create_builtin_tools():
         return hits
 
     async def shell_exec(args: ShellArgs, ctx: ToolExecutionContext):
-        completed = subprocess.run(
-            ["bash", "-lc", args.command],
+        result: SandboxResult = await resolved.sandbox.execute(
+            args.command,
             cwd=ctx.workspace_root,
-            capture_output=True,
-            text=True,
-            check=False,
+            timeout_ms=resolved.shell_timeout_ms,
         )
-        output = completed.stdout
-        if completed.stderr:
-            output = f"{output}\n{completed.stderr}".strip()
+        output = result.stdout
+        if result.stderr:
+            output = f"{output}\n{result.stderr}".strip()
+        if result.exit_code != 0:
+            return output or f"Command exited with code {result.exit_code}"
         return output
-
-    def wrap(fn):
-        async def runner(model, ctx: ToolExecutionContext | None = None):
-            del ctx
-            return await fn(model, ctx)
-
-        return runner
 
     return [
         create_pydantic_tool(

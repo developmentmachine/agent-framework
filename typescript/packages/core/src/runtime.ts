@@ -28,6 +28,13 @@ import { DefaultRunManager } from './run-manager.js';
 import { DefaultSessionLane } from './session-lane.js';
 import { DefaultSessionRouter } from './session-router.js';
 import { DefaultToolRegistry } from './tool-registry.js';
+import {
+  ConsoleSpanExporter,
+  createTelemetryPipeline,
+  type SpanExporter,
+  type TelemetryCollector,
+  type TelemetryPipeline,
+} from './telemetry.js';
 
 export interface AgentRuntime {
   config: AgentConfig;
@@ -43,6 +50,7 @@ export interface AgentRuntime {
   runs: RunManager;
   bus: EventBus;
   router: SessionRouter;
+  telemetry?: TelemetryPipeline;
 }
 
 export interface CreateAgentRuntimeOptions {
@@ -54,6 +62,7 @@ export interface CreateAgentRuntimeOptions {
   policy?: PermissionPolicy;
   compactor?: ContextCompactor;
   onAskPermission?: (request: import('./types/domain.js').PermissionCheckRequest) => Promise<boolean>;
+  telemetry?: boolean | { collector?: TelemetryCollector; exporters?: SpanExporter[] };
 }
 
 export function createAgentRuntime(
@@ -90,6 +99,15 @@ export function createAgentRuntime(
 
   const router = new DefaultSessionRouter(lane, loop, runs, bus);
 
+  let telemetry: TelemetryPipeline | undefined;
+  if (options.telemetry) {
+    const exporters =
+      typeof options.telemetry === 'object' && options.telemetry.exporters
+        ? options.telemetry.exporters
+        : [new ConsoleSpanExporter()];
+    telemetry = createTelemetryPipeline(bus, exporters);
+  }
+
   return {
     config,
     provider,
@@ -104,6 +122,7 @@ export function createAgentRuntime(
     runs,
     bus,
     router,
+    telemetry,
   };
 }
 
@@ -118,5 +137,9 @@ export async function runAgent(
     events.push(result.value);
     result = await generator.next();
   }
-  return { events, reason: result.value ?? { kind: 'completed' } };
+  const reason = result.value ?? { kind: 'completed' };
+  if (runtime.telemetry) {
+    await runtime.telemetry.flush();
+  }
+  return { events, reason };
 }

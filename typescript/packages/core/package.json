@@ -19,9 +19,11 @@
     "zod": "^3.24.2"
   },
   "devDependencies": {
+    "@agent-framework/plugin-sdk": "workspace:*",
+    "@agent-framework/providers": "workspace:*",
+    "@agent-framework/tools-builtin": "workspace:*",
     "@types/node": "^22.13.10",
     "typescript": "^5.8.2",
-    "vitest": "^3.0.9",
-    "@agent-framework/providers": "workspace:*"
+    "vitest": "^3.0.9"
   }
 }

@@ -63,27 +63,7 @@ export class PluginLoader {
   }
 }
 
-export interface MCPClientOptions {
-  command: string;
-  args?: string[];
-  env?: Record<string, string>;
-}
-
-export class MCPClient {
-  constructor(private readonly options: MCPClientOptions) {}
-
-  async listTools(): Promise<Array<{ name: string; description: string; inputSchema: Record<string, unknown> }>> {
-    // Phase 2 skeleton: real stdio transport can be wired here.
-    void this.options;
-    return [];
-  }
-
-  async callTool(name: string, args: Record<string, unknown>): Promise<unknown> {
-    void name;
-    void args;
-    throw new Error('MCP transport not configured');
-  }
-}
+export { MCPClient, registerMcpTools, type MCPClientOptions, type MCPToolDescriptor } from './mcp-stdio.js';
 
 export class SubAgentToolFactory {
   constructor(private readonly runPrompt: (prompt: string, sessionId: string) => Promise<string>) {}

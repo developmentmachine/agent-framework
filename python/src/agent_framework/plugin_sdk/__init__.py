@@ -3,6 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from agent_framework.plugin_sdk.mcp_stdio import MCPClient, register_mcp_tools
+
+__all__ = ["PluginManifest", "PluginLoader", "MCPClient", "register_mcp_tools", "SubAgentToolFactory"]
+
 
 @dataclass
 class PluginManifest:
@@ -18,18 +22,6 @@ class PluginLoader:
 
     async def load_all(self) -> list[dict[str, Any]]:
         return []
-
-
-class MCPClient:
-    def __init__(self, command: str, args: list[str] | None = None) -> None:
-        self.command = command
-        self.args = args or []
-
-    async def list_tools(self) -> list[dict[str, Any]]:
-        return []
-
-    async def call_tool(self, name: str, args: dict[str, Any]) -> Any:
-        raise NotImplementedError("MCP transport not configured")
 
 
 class SubAgentToolFactory:

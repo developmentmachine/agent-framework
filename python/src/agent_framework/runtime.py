@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 from agent_framework.core.agent_loop import DefaultAgentLoop
 from agent_framework.core.context_engine import WorkspaceContextEngine
@@ -31,6 +32,7 @@ from agent_framework.core.session_router import DefaultSessionRouter
 from agent_framework.core.tool_registry import DefaultToolRegistry
 from agent_framework.core.agent_loop import DefaultAgentLoop as Loop
 from agent_framework.core.contracts import AgentLoopDeps
+from agent_framework.core.telemetry import ConsoleSpanExporter, TelemetryPipeline, create_telemetry_pipeline
 
 
 @dataclass
@@ -48,6 +50,7 @@ class AgentRuntime:
     runs: RunManager
     bus: EventBus
     router: SessionRouter
+    telemetry: TelemetryPipeline | None = None
 
 
 def create_agent_runtime(
@@ -61,6 +64,7 @@ def create_agent_runtime(
     policy: PermissionPolicy | None = None,
     on_ask_permission=None,
     compactor=None,
+    telemetry: bool | dict[str, Any] | None = None,
 ) -> AgentRuntime:
     resolved_config = config or DEFAULT_AGENT_CONFIG
     resolved_tools = tools or DefaultToolRegistry()
@@ -90,6 +94,11 @@ def create_agent_runtime(
 
     router = DefaultSessionRouter(lane, loop, runs, bus)
 
+    telemetry_pipeline = None
+    if telemetry:
+        exporters = telemetry.get("exporters") if isinstance(telemetry, dict) else [ConsoleSpanExporter()]
+        telemetry_pipeline = create_telemetry_pipeline(bus, exporters)
+
     return AgentRuntime(
         config=resolved_config,
         provider=provider,
@@ -104,6 +113,7 @@ def create_agent_runtime(
         runs=runs,
         bus=bus,
         router=router,
+        telemetry=telemetry_pipeline,
     )
 
 
@@ -111,4 +121,6 @@ async def run_agent(runtime: AgentRuntime, request: AgentRunRequest):
     events = []
     async for event in runtime.router.route(request):
         events.append(event)
+    if runtime.telemetry:
+        runtime.telemetry.flush()
     return events

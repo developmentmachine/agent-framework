@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+import json
 import subprocess
 from dataclasses import dataclass
 
@@ -13,8 +15,17 @@ class SandboxResult:
 
 class LocalSandboxBackend:
     async def execute(self, command: str, *, cwd: str, timeout_ms: int) -> SandboxResult:
-        del timeout_ms
-        completed = subprocess.run(["bash", "-lc", command], cwd=cwd, capture_output=True, text=True, check=False)
+        def _run() -> subprocess.CompletedProcess[str]:
+            return subprocess.run(
+                ["bash", "-lc", command],
+                cwd=cwd,
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=max(timeout_ms / 1000, 0.001),
+            )
+
+        completed = await asyncio.to_thread(_run)
         return SandboxResult(stdout=completed.stdout, stderr=completed.stderr, exit_code=completed.returncode)
 
 

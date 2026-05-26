@@ -1,11 +1,18 @@
-import { execFile } from 'node:child_process';
 import { readFile, writeFile, readdir } from 'node:fs/promises';
 import { join, relative, resolve } from 'node:path';
-import { promisify } from 'node:util';
 import { z } from 'zod';
-import { createZodTool, type Tool, type ToolRegistry } from '@agent-framework/core';
+import {
+  LocalSandboxBackend,
+  createZodTool,
+  type SandboxBackend,
+  type Tool,
+  type ToolRegistry,
+} from '@agent-framework/core';
 
-const execFileAsync = promisify(execFile);
+export interface BuiltinToolsOptions {
+  sandbox?: SandboxBackend;
+  shellTimeoutMs?: number;
+}
 
 function resolveWithinWorkspace(workspaceRoot: string, targetPath: string): string {
   const resolved = resolve(workspaceRoot, targetPath);
@@ -16,13 +23,16 @@ function resolveWithinWorkspace(workspaceRoot: string, targetPath: string): stri
   return resolved;
 }
 
-export function registerBuiltinTools(registry: ToolRegistry): void {
-  for (const tool of createBuiltinTools()) {
+export function registerBuiltinTools(registry: ToolRegistry, options: BuiltinToolsOptions = {}): void {
+  for (const tool of createBuiltinTools(options)) {
     registry.register(tool);
   }
 }
 
-export function createBuiltinTools(): Tool[] {
+export function createBuiltinTools(options: BuiltinToolsOptions = {}): Tool[] {
+  const sandbox = options.sandbox ?? new LocalSandboxBackend();
+  const shellTimeoutMs = options.shellTimeoutMs ?? 60_000;
+
   return [
     createZodTool(
       {
@@ -131,12 +141,16 @@ export function createBuiltinTools(): Tool[] {
       },
       z.object({ command: z.string() }),
       async (ctx, args) => {
-        const { stdout, stderr } = await execFileAsync('bash', ['-lc', args.command], {
+        const result = await sandbox.execute(args.command, {
           cwd: ctx.workspaceRoot,
-          maxBuffer: 1024 * 1024,
-          signal: ctx.abortSignal,
+          timeoutMs: shellTimeoutMs,
+          abortSignal: ctx.abortSignal,
         });
-        return `${stdout}${stderr ? `\n${stderr}` : ''}`.trim();
+        const output = `${result.stdout}${result.stderr ? `\n${result.stderr}` : ''}`.trim();
+        if (result.exitCode !== 0) {
+          return output || `Command exited with code ${result.exitCode}`;
+        }
+        return output;
       },
     ),
   ];
