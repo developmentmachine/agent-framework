@@ -45,6 +45,12 @@ importers:
       '@agent-framework/core':
         specifier: workspace:*
         version: link:../core
+      '@agent-framework/gateway':
+        specifier: workspace:*
+        version: link:../gateway
+      '@agent-framework/plugin-sdk':
+        specifier: workspace:*
+        version: link:../plugin-sdk
       '@agent-framework/providers':
         specifier: workspace:*
         version: link:../providers
@@ -124,6 +130,9 @@ importers:
         specifier: workspace:*
         version: link:../core
     devDependencies:
+      '@agent-framework/providers':
+        specifier: workspace:*
+        version: link:../providers
       '@types/node':
         specifier: ^22.13.10
         version: 22.19.19

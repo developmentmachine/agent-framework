@@ -15,18 +15,34 @@ export class DefaultSessionRouter implements SessionRouter {
 
     const queue: StreamEvent[] = [];
     let finished = false;
+    let wake: (() => void) | undefined;
     const state: { terminal: TerminalReason } = { terminal: { kind: 'completed' } };
 
+    const signal = (): void => {
+      wake?.();
+      wake = undefined;
+    };
+
     void this.lane.enqueue(request.sessionId, async () => {
-      const generator = this.loop.run(request);
-      let result = await generator.next();
-      while (!result.done) {
-        this.bus.publish(result.value);
-        queue.push(result.value);
-        result = await generator.next();
+      try {
+        const generator = this.loop.run(request);
+        let result = await generator.next();
+        while (!result.done) {
+          this.bus.publish(result.value);
+          queue.push(result.value);
+          signal();
+          result = await generator.next();
+        }
+        state.terminal = result.value ?? { kind: 'completed' };
+      } catch (error) {
+        state.terminal = {
+          kind: 'error',
+          message: error instanceof Error ? error.message : String(error),
+        };
+      } finally {
+        finished = true;
+        signal();
       }
-      state.terminal = result.value ?? { kind: 'completed' };
-      finished = true;
     });
 
     while (true) {
@@ -36,7 +52,14 @@ export class DefaultSessionRouter implements SessionRouter {
       if (finished) {
         break;
       }
-      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+      await new Promise<void>((resolve) => {
+        wake = resolve;
+        queueMicrotask(() => {
+          if (queue.length > 0 || finished) {
+            resolve();
+          }
+        });
+      });
     }
 
     const terminal = state.terminal;

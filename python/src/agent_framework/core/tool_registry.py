@@ -15,6 +15,9 @@ class DefaultToolRegistry(ToolRegistry):
     def register(self, tool: Tool) -> None:
         self._tools[tool.definition.name] = tool
 
+    def unregister(self, name: str) -> None:
+        self._tools.pop(name, None)
+
     def list(self, toolset: list[str] | None = None) -> list[ToolDefinition]:
         tools = [tool.definition for tool in self._tools.values()]
         if toolset:

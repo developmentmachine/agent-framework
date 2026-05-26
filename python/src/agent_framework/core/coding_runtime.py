@@ -3,6 +3,7 @@ from __future__ import annotations
 from agent_framework.core.context_compactor import TruncateMiddleCompactor
 from agent_framework.core.llm_summarization_compactor import LlmSummarizationCompactor
 from agent_framework.core.provider_summarizer import create_provider_summarizer
+from agent_framework.core.sqlite_memory import SqliteMemoryProvider
 from agent_framework.core.sqlite_session import SqliteSessionStore
 from agent_framework.core.tool_registry import DefaultToolRegistry
 from agent_framework.runtime import create_agent_runtime
@@ -21,10 +22,12 @@ def create_coding_runtime(
     compactor=None,
     telemetry=None,
     sqlite_session_path: str | None = None,
+    sqlite_memory_path: str | None = None,
     summarize_with_provider: bool = False,
 ):
     resolved_tools = tools or DefaultToolRegistry()
     resolved_sessions = SqliteSessionStore(sqlite_session_path) if sqlite_session_path else sessions
+    resolved_memory = SqliteMemoryProvider(sqlite_memory_path) if sqlite_memory_path else memory
     resolved_compactor = compactor
     if resolved_compactor is None:
         if summarize_with_provider:
@@ -37,7 +40,7 @@ def create_coding_runtime(
         config=config,
         tools=resolved_tools,
         sessions=resolved_sessions,
-        memory=memory,
+        memory=resolved_memory,
         hooks=hooks,
         policy=policy,
         on_ask_permission=on_ask_permission,

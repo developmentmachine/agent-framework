@@ -17,11 +17,14 @@ export interface LoadedPlugin {
   plugin: Plugin;
 }
 
-async function importPluginModule(searchPath: string): Promise<Plugin | undefined> {
+async function importPluginModule(searchPath: string, bustCache = false): Promise<Plugin | undefined> {
   for (const fileName of ['index.js', 'index.mjs']) {
     try {
       const modulePath = join(searchPath, fileName);
-      const imported = (await import(pathToFileURL(modulePath).href)) as {
+      const href = bustCache
+        ? `data:text/javascript;base64,${Buffer.from(await readFile(modulePath, 'utf8')).toString('base64')}`
+        : pathToFileURL(modulePath).href;
+      const imported = (await import(href)) as {
         default?: Plugin;
         plugin?: Plugin;
       };
@@ -40,14 +43,14 @@ export function definePlugin(manifest: PluginManifest, register: Plugin['registe
 export class PluginLoader {
   constructor(private readonly searchPaths: string[]) {}
 
-  async loadAll(): Promise<LoadedPlugin[]> {
+  async loadAll(options: { bustCache?: boolean } = {}): Promise<LoadedPlugin[]> {
     const plugins: LoadedPlugin[] = [];
     for (const searchPath of this.searchPaths) {
       const manifestPath = join(searchPath, 'agent.plugin.json');
       try {
         const raw = await readFile(manifestPath, 'utf8');
         const manifest = JSON.parse(raw) as PluginManifest;
-        const plugin = await importPluginModule(searchPath);
+        const plugin = await importPluginModule(searchPath, options.bustCache);
         if (plugin) {
           plugins.push({ manifest, plugin });
         }
@@ -58,8 +61,8 @@ export class PluginLoader {
     return plugins.sort((a, b) => a.manifest.id.localeCompare(b.manifest.id));
   }
 
-  async apply(registry: ToolRegistry, hooks: DefaultHookRunner, providers: ModelProvider[] = []): Promise<void> {
-    const plugins = await this.loadAll();
+  async apply(registry: ToolRegistry, hooks: DefaultHookRunner, providers: ModelProvider[] = [], options: { bustCache?: boolean } = {}): Promise<void> {
+    const plugins = await this.loadAll(options);
     const context: PluginContext = {
       registerTool(tool: Tool) {
         registry.register(tool);
@@ -80,6 +83,7 @@ export class PluginLoader {
 
 export { MCPClient, registerMcpTools, type MCPClientOptions, type MCPToolDescriptor } from './mcp-stdio.js';
 export { bootstrapPlugins, type BootstrapPluginsOptions } from './bootstrap.js';
+export { PluginWatcher, type PluginWatcherOptions } from './plugin-watcher.js';
 
 export class SubAgentToolFactory {
   constructor(private readonly runPrompt: (prompt: string, sessionId: string) => Promise<string>) {}

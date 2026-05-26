@@ -6,6 +6,7 @@ export { DefaultHookRunner } from './hook-runner.js';
 export { DefaultPermissionPolicy, DEFAULT_CODING_POLICY_RULES } from './permission-policy.js';
 export { InMemorySessionStore } from './in-memory-session.js';
 export { SqliteSessionStore } from './sqlite-session.js';
+export { SqliteMemoryProvider } from './sqlite-memory.js';
 export { InMemoryMemoryProvider } from './in-memory-memory.js';
 export { DefaultToolRegistry, createZodTool } from './tool-registry.js';
 export { WorkspaceContextEngine } from './context-engine.js';

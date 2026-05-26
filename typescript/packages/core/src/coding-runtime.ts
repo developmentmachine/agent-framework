@@ -1,6 +1,7 @@
 import { TruncateMiddleCompactor } from './context-compactor.js';
 import { LlmSummarizationCompactor } from './llm-summarization-compactor.js';
 import { createProviderSummarizer } from './provider-summarizer.js';
+import { SqliteMemoryProvider } from './sqlite-memory.js';
 import { SqliteSessionStore } from './sqlite-session.js';
 import { DefaultToolRegistry } from './tool-registry.js';
 import { createAgentRuntime, type AgentRuntime, type CreateAgentRuntimeOptions } from './runtime.js';
@@ -8,6 +9,7 @@ import type { ModelProvider } from './types/contracts.js';
 
 export interface CreateCodingRuntimeOptions extends CreateAgentRuntimeOptions {
   sqliteSessionPath?: string;
+  sqliteMemoryPath?: string;
   summarizeWithProvider?: boolean;
 }
 
@@ -19,6 +21,9 @@ export function createCodingRuntime(
   const sessions = options.sqliteSessionPath
     ? new SqliteSessionStore(options.sqliteSessionPath)
     : options.sessions;
+  const memory = options.sqliteMemoryPath
+    ? new SqliteMemoryProvider(options.sqliteMemoryPath)
+    : options.memory;
 
   const compactor =
     options.compactor ??
@@ -30,6 +35,7 @@ export function createCodingRuntime(
     ...options,
     tools,
     sessions,
+    memory,
     compactor,
   });
 }

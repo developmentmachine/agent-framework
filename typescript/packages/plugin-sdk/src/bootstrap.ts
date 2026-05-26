@@ -3,6 +3,7 @@ import { DefaultHookRunner } from '@agent-framework/core';
 
 export interface BootstrapPluginsOptions {
   searchPaths: string[];
+  bustCache?: boolean;
 }
 
 export async function bootstrapPlugins(
@@ -13,5 +14,5 @@ export async function bootstrapPlugins(
   const loader = new PluginLoader(options.searchPaths);
   const hooks = runtime.hooks as DefaultHookRunner;
   const providers = [runtime.provider];
-  await loader.apply(runtime.tools, hooks, providers);
+  await loader.apply(runtime.tools, hooks, providers, { bustCache: options.bustCache });
 }
