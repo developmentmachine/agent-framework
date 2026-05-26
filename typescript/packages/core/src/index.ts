@@ -29,6 +29,10 @@ export {
 } from './telemetry.js';
 export { BestOfNOrchestrator, type BestOfNCandidate, type BestOfNResult } from './best-of-n.js';
 export { InProcessSubAgentRunner, type SubAgentHandle } from './sub-agent-runner.js';
+export { serializeStreamEvent } from './stream-event.js';
+export { createProviderSummarizer } from './provider-summarizer.js';
+export { createCodingRuntime, type CreateCodingRuntimeOptions } from './coding-runtime.js';
+export { CronAgentSurface, type CronAgentSurfaceOptions } from './cron-agent-surface.js';
 
 export { DefaultRunManager } from './run-manager.js';
 export { DefaultAgentLoop, buildAssistantMessage, toolResultMessage } from './agent-loop.js';

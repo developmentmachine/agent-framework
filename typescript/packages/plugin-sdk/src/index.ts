@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import type {
   HookHandler,
   ModelProvider,
@@ -16,6 +17,22 @@ export interface LoadedPlugin {
   plugin: Plugin;
 }
 
+async function importPluginModule(searchPath: string): Promise<Plugin | undefined> {
+  for (const fileName of ['index.js', 'index.mjs']) {
+    try {
+      const modulePath = join(searchPath, fileName);
+      const imported = (await import(pathToFileURL(modulePath).href)) as {
+        default?: Plugin;
+        plugin?: Plugin;
+      };
+      return imported.default ?? imported.plugin;
+    } catch {
+      // try next module filename
+    }
+  }
+  return undefined;
+}
+
 export function definePlugin(manifest: PluginManifest, register: Plugin['register']): Plugin {
   return { manifest, register };
 }
@@ -30,9 +47,7 @@ export class PluginLoader {
       try {
         const raw = await readFile(manifestPath, 'utf8');
         const manifest = JSON.parse(raw) as PluginManifest;
-        const modulePath = join(searchPath, 'index.js');
-        const imported = (await import(modulePath)) as { default?: Plugin; plugin?: Plugin };
-        const plugin = imported.default ?? imported.plugin;
+        const plugin = await importPluginModule(searchPath);
         if (plugin) {
           plugins.push({ manifest, plugin });
         }
@@ -64,6 +79,7 @@ export class PluginLoader {
 }
 
 export { MCPClient, registerMcpTools, type MCPClientOptions, type MCPToolDescriptor } from './mcp-stdio.js';
+export { bootstrapPlugins, type BootstrapPluginsOptions } from './bootstrap.js';
 
 export class SubAgentToolFactory {
   constructor(private readonly runPrompt: (prompt: string, sessionId: string) => Promise<string>) {}
