@@ -11,7 +11,13 @@ import type {
   MessageContent,
   TerminalReason,
   ToolCallContent,
+  ToolConcurrency,
 } from './types/domain.js';
+
+interface ToolExecutionResult {
+  events: StreamEvent[];
+  message: Message;
+}
 
 export class DefaultAgentLoop implements AgentLoop {
   constructor(private readonly deps: AgentLoopDeps) {}
@@ -86,10 +92,13 @@ export class DefaultAgentLoop implements AgentLoop {
         }
 
         const toolMessages: Message[] = [];
-        for (const call of pendingCalls) {
-          const toolMessage = yield* this.executeToolCall(request, runId, call, hookContext);
-          toolMessages.push(toolMessage);
-          history.push(toolMessage);
+        for await (const event of this.executeToolCalls(request, runId, pendingCalls, hookContext)) {
+          if (isToolExecutionResult(event)) {
+            toolMessages.push(event.message);
+            history.push(event.message);
+          } else {
+            yield event;
+          }
         }
         await this.deps.sessionStore.appendMessages(request.sessionId, toolMessages);
       }
@@ -113,13 +122,58 @@ export class DefaultAgentLoop implements AgentLoop {
     }
   }
 
-  private async *executeToolCall(
+  private async *executeToolCalls(
+    request: AgentRunRequest,
+    runId: string,
+    calls: ToolCallRequest[],
+    hookContext: { sessionId: string; runId: string },
+  ): AsyncGenerator<StreamEvent | ToolExecutionResult, void, unknown> {
+    let index = 0;
+    while (index < calls.length) {
+      const call = calls[index]!;
+      const concurrency = this.toolConcurrency(call.name);
+
+      if (concurrency === 'serial') {
+        const result = await this.executeToolCall(request, runId, call, hookContext);
+        for (const event of result.events) {
+          yield event;
+        }
+        yield result;
+        index += 1;
+        continue;
+      }
+
+      const batch: ToolCallRequest[] = [call];
+      index += 1;
+      while (index < calls.length && this.toolConcurrency(calls[index]!.name) === 'parallel') {
+        batch.push(calls[index]!);
+        index += 1;
+      }
+
+      const results = await Promise.all(
+        batch.map((item) => this.executeToolCall(request, runId, item, hookContext)),
+      );
+      for (const result of results) {
+        for (const event of result.events) {
+          yield event;
+        }
+        yield result;
+      }
+    }
+  }
+
+  private toolConcurrency(toolName: string): ToolConcurrency {
+    return this.deps.tools.get(toolName)?.definition.concurrency ?? 'parallel';
+  }
+
+  private async executeToolCall(
     request: AgentRunRequest,
     runId: string,
     call: ToolCallRequest,
     hookContext: { sessionId: string; runId: string },
-  ): AsyncGenerator<StreamEvent, Message, unknown> {
-    yield { type: 'tool', callId: call.id, name: call.name, status: 'start' };
+  ): Promise<ToolExecutionResult> {
+    const events: StreamEvent[] = [];
+    events.push({ type: 'tool', callId: call.id, name: call.name, status: 'start' });
 
     await this.deps.hooks.emit({
       type: 'preToolUse',
@@ -143,8 +197,8 @@ export class DefaultAgentLoop implements AgentLoop {
         result: null,
         error,
       });
-      yield { type: 'tool', callId: call.id, name: call.name, status: 'error', output: error };
-      return toolResultMessage(call.id, error, true);
+      events.push({ type: 'tool', callId: call.id, name: call.name, status: 'error', output: error });
+      return { events, message: toolResultMessage(call.id, error, true) };
     }
 
     if (decision === 'ask') {
@@ -164,8 +218,8 @@ export class DefaultAgentLoop implements AgentLoop {
           result: null,
           error,
         });
-        yield { type: 'tool', callId: call.id, name: call.name, status: 'error', output: error };
-        return toolResultMessage(call.id, error, true);
+        events.push({ type: 'tool', callId: call.id, name: call.name, status: 'error', output: error });
+        return { events, message: toolResultMessage(call.id, error, true) };
       }
     }
 
@@ -194,16 +248,20 @@ export class DefaultAgentLoop implements AgentLoop {
         : JSON.stringify(execution.output, null, 2);
 
     const status = execution.error ? 'error' : 'end';
-    yield {
+    events.push({
       type: 'tool',
       callId: call.id,
       name: call.name,
       status,
       output: content,
-    };
+    });
 
-    return toolResultMessage(call.id, content, Boolean(execution.error));
+    return { events, message: toolResultMessage(call.id, content, Boolean(execution.error)) };
   }
+}
+
+function isToolExecutionResult(value: StreamEvent | ToolExecutionResult): value is ToolExecutionResult {
+  return typeof value === 'object' && value !== null && 'message' in value && 'events' in value;
 }
 
 export function buildAssistantMessage(text: string, calls: ToolCallRequest[]): Message {

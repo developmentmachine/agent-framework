@@ -32,6 +32,12 @@ export interface Tool {
   execute(ctx: ToolExecutionContext, args: Record<string, unknown>): Promise<unknown>;
 }
 
+export interface SessionSearchHit {
+  sessionId: string;
+  messageIndex: number;
+  snippet: string;
+}
+
 export interface SessionRecord {
   id: string;
   messages: Message[];
@@ -45,6 +51,7 @@ export interface SessionStore {
   save(session: SessionRecord): Promise<void>;
   appendMessages(sessionId: string, messages: Message[]): Promise<void>;
   list(): Promise<SessionRecord[]>;
+  search?(query: string, limit?: number): Promise<SessionSearchHit[]>;
 }
 
 export interface MemoryEntry {
@@ -110,6 +117,9 @@ export interface SubAgentRequest {
 
 export interface SubAgentRunner {
   run(request: SubAgentRequest): AsyncGenerator<StreamEvent, TerminalReason, unknown>;
+  spawn?(request: SubAgentRequest): Promise<{ sessionId: string; parentRunId: string; runId: string }>;
+  wait?(handle: { runId: string }, timeoutMs?: number): Promise<TerminalReason>;
+  cancel?(handle: { runId: string }): Promise<void>;
 }
 
 export interface ToolRegistry {

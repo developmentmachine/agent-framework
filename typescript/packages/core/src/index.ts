@@ -5,11 +5,13 @@ export { DefaultSessionLane } from './session-lane.js';
 export { DefaultHookRunner } from './hook-runner.js';
 export { DefaultPermissionPolicy, DEFAULT_CODING_POLICY_RULES } from './permission-policy.js';
 export { InMemorySessionStore } from './in-memory-session.js';
+export { SqliteSessionStore } from './sqlite-session.js';
 export { InMemoryMemoryProvider } from './in-memory-memory.js';
 export { DefaultToolRegistry, createZodTool } from './tool-registry.js';
 export { WorkspaceContextEngine } from './context-engine.js';
 
 export { TruncateMiddleCompactor, estimateTokens } from './context-compactor.js';
+export { LlmSummarizationCompactor, type SummarizeMessages } from './llm-summarization-compactor.js';
 export { LocalSandboxBackend, WorktreeSandboxBackend } from './sandbox.js';
 export { MultiAgentRouter, type AgentRouteRule, type RoutedAgentRequest } from './multi-agent-router.js';
 export { InMemoryChannelAdapter, type ChannelAdapter, type NormalizedMessage } from './channel-adapter.js';
@@ -26,6 +28,7 @@ export {
   type TelemetryPipeline,
 } from './telemetry.js';
 export { BestOfNOrchestrator, type BestOfNCandidate, type BestOfNResult } from './best-of-n.js';
+export { InProcessSubAgentRunner, type SubAgentHandle } from './sub-agent-runner.js';
 
 export { DefaultRunManager } from './run-manager.js';
 export { DefaultAgentLoop, buildAssistantMessage, toolResultMessage } from './agent-loop.js';

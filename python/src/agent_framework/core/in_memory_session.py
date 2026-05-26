@@ -1,9 +1,17 @@
 from __future__ import annotations
 
+import json
+from dataclasses import asdict
 from datetime import datetime, timezone
 
 from agent_framework.core.contracts import SessionRecord, SessionStore
 from agent_framework.core.domain import Message
+
+
+def _message_text(message: Message) -> str:
+    if isinstance(message.content, str):
+        return message.content
+    return json.dumps([asdict(part) for part in message.content])
 
 
 class InMemorySessionStore(SessionStore):
@@ -29,3 +37,19 @@ class InMemorySessionStore(SessionStore):
             return
         existing.messages.extend(messages)
         existing.updated_at = now
+
+    async def search(self, query: str, limit: int = 20) -> list[dict[str, str | int]]:
+        normalized = query.lower()
+        hits: list[dict[str, str | int]] = []
+        for session in self._sessions.values():
+            for index, message in enumerate(session.messages):
+                text = _message_text(message)
+                if normalized in text.lower():
+                    hits.append(
+                        {
+                            "session_id": session.id,
+                            "message_index": index,
+                            "snippet": text[:120],
+                        }
+                    )
+        return hits[:limit]

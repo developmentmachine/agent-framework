@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 import json
+from dataclasses import dataclass
 from typing import AsyncIterator
 from uuid import uuid4
 
@@ -21,6 +23,12 @@ from agent_framework.core.domain import (
     ToolExecutionContext,
     ToolResultContent,
 )
+
+
+@dataclass
+class _ToolExecutionResult:
+    events: list[StreamEvent]
+    message: Message
 
 
 class DefaultAgentLoop:
@@ -80,16 +88,12 @@ class DefaultAgentLoop:
                     return
 
                 tool_messages: list[Message] = []
-                for call in pending_calls:
-                    message = None
-                    async for event in self._execute_tool_call(request, run_id, call, hook_context):
-                        if isinstance(event, Message):
-                            message = event
-                        else:
-                            yield event
-                    if message is not None:
-                        tool_messages.append(message)
-                        history.append(message)
+                async for event in self._execute_tool_calls(request, run_id, pending_calls, hook_context):
+                    if isinstance(event, _ToolExecutionResult):
+                        tool_messages.append(event.message)
+                        history.append(event.message)
+                    else:
+                        yield event
                 await self._deps.session_store.append_messages(request.session_id, tool_messages)
 
             await self._deps.hooks.emit({
@@ -107,8 +111,40 @@ class DefaultAgentLoop:
             })
             yield LifecycleEvent(phase="error", run_id=run_id, error=message)
 
-    async def _execute_tool_call(self, request, run_id, call, hook_context):
-        yield ToolEvent(call_id=call.id, name=call.name, status="start")
+    async def _execute_tool_calls(self, request, run_id, calls, hook_context):
+        index = 0
+        while index < len(calls):
+            call = calls[index]
+            concurrency = self._tool_concurrency(call.name)
+
+            if concurrency == "serial":
+                result = await self._execute_tool_call(request, run_id, call, hook_context)
+                for event in result.events:
+                    yield event
+                yield result
+                index += 1
+                continue
+
+            batch = [call]
+            index += 1
+            while index < len(calls) and self._tool_concurrency(calls[index].name) == "parallel":
+                batch.append(calls[index])
+                index += 1
+
+            results = await asyncio.gather(
+                *[self._execute_tool_call(request, run_id, item, hook_context) for item in batch]
+            )
+            for result in results:
+                for event in result.events:
+                    yield event
+                yield result
+
+    def _tool_concurrency(self, tool_name: str) -> str:
+        tool = self._deps.tools.get(tool_name)
+        return tool.definition.concurrency if tool else "parallel"
+
+    async def _execute_tool_call(self, request, run_id, call, hook_context) -> _ToolExecutionResult:
+        events: list[StreamEvent] = [ToolEvent(call_id=call.id, name=call.name, status="start")]
         await self._deps.hooks.emit({
             "type": "preToolUse",
             "context": hook_context,
@@ -119,9 +155,8 @@ class DefaultAgentLoop:
         decision = await self._deps.policy.check(call.name, call.arguments, request.session_id)
         if decision == "deny":
             error = f"Permission denied for tool {call.name}"
-            yield ToolEvent(call_id=call.id, name=call.name, status="error", output=error)
-            yield _tool_result_message(call.id, error, True)
-            return
+            events.append(ToolEvent(call_id=call.id, name=call.name, status="error", output=error))
+            return _ToolExecutionResult(events=events, message=_tool_result_message(call.id, error, True))
 
         if decision == "ask":
             approved = False
@@ -131,9 +166,8 @@ class DefaultAgentLoop:
                 )
             if not approved:
                 error = f"User denied tool {call.name}"
-                yield ToolEvent(call_id=call.id, name=call.name, status="error", output=error)
-                yield _tool_result_message(call.id, error, True)
-                return
+                events.append(ToolEvent(call_id=call.id, name=call.name, status="error", output=error))
+                return _ToolExecutionResult(events=events, message=_tool_result_message(call.id, error, True))
 
         ctx = ToolExecutionContext(
             session_id=request.session_id,
@@ -142,13 +176,18 @@ class DefaultAgentLoop:
         )
         output, error = await self._deps.tools.execute(ctx, call)
         content = error or (output if isinstance(output, str) else json.dumps(output, indent=2))
-        yield ToolEvent(
-            call_id=call.id,
-            name=call.name,
-            status="error" if error else "end",
-            output=content,
+        events.append(
+            ToolEvent(
+                call_id=call.id,
+                name=call.name,
+                status="error" if error else "end",
+                output=content,
+            )
         )
-        yield _tool_result_message(call.id, content, bool(error))
+        return _ToolExecutionResult(
+            events=events,
+            message=_tool_result_message(call.id, content, bool(error)),
+        )
 
 
 def _build_assistant_message(text: str, calls: list[ToolCallRequest]) -> Message:
