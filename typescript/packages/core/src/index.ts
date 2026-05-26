@@ -10,6 +10,7 @@ export { SqliteMemoryProvider } from './sqlite-memory.js';
 export { InMemoryMemoryProvider } from './in-memory-memory.js';
 export { DefaultToolRegistry, createZodTool } from './tool-registry.js';
 export { WorkspaceContextEngine } from './context-engine.js';
+export { MemoryAugmentedContextEngine } from './memory-context-engine.js';
 
 export { TruncateMiddleCompactor, estimateTokens } from './context-compactor.js';
 export { LlmSummarizationCompactor, type SummarizeMessages } from './llm-summarization-compactor.js';

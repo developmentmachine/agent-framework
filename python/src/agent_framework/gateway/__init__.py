@@ -20,6 +20,7 @@ class AgentGateway:
         self._port = port
         self._seq = 0
         self._server = None
+        self._active_runs: dict[str, asyncio.Event] = {}
 
     async def _handle(self, websocket) -> None:
         raw = await websocket.recv()
@@ -37,7 +38,14 @@ class AgentGateway:
                     "payload": {
                         "hello": "ok",
                         "features": {
-                            "methods": ["agent", "health", "tools.list", "sessions.list", "memory.search"],
+                            "methods": [
+                                "agent",
+                                "agent.cancel",
+                                "health",
+                                "tools.list",
+                                "sessions.list",
+                                "memory.search",
+                            ],
                             "events": ["agent"],
                         },
                     },
@@ -109,11 +117,36 @@ class AgentGateway:
                     )
                     continue
 
+                if method == "agent.cancel":
+                    run_id = str(params.get("runId", ""))
+                    cancel_event = self._active_runs.get(run_id)
+                    if cancel_event is not None:
+                        cancel_event.set()
+                        self._active_runs.pop(run_id, None)
+                    await websocket.send(
+                        json.dumps(
+                            {
+                                "type": "res",
+                                "id": request_id,
+                                "ok": True,
+                                "payload": {"cancelled": cancel_event is not None},
+                            }
+                        )
+                    )
+                    continue
+
                 if method == "agent":
+                    session_id = str(params.get("sessionId", "default"))
+                    message = str(params.get("message", ""))
+                    run = self._runtime.runs.create(session_id)
+                    cancel_event = asyncio.Event()
+                    self._active_runs[run.run_id] = cancel_event
+
                     async for event in self._runtime.router.route(
                         AgentRunRequest(
-                            session_id=str(params.get("sessionId", "default")),
-                            input={"role": "user", "content": str(params.get("message", ""))},
+                            session_id=session_id,
+                            input={"role": "user", "content": message},
+                            cancel_event=cancel_event,
                         )
                     ):
                         self._seq += 1
@@ -127,13 +160,15 @@ class AgentGateway:
                                 }
                             )
                         )
+
+                    self._active_runs.pop(run.run_id, None)
                     await websocket.send(
                         json.dumps(
                             {
                                 "type": "res",
                                 "id": request_id,
                                 "ok": True,
-                                "payload": {"status": "completed"},
+                                "payload": {"status": "completed", "runId": run.run_id},
                             }
                         )
                     )
@@ -154,10 +189,11 @@ class AgentGateway:
                     json.dumps({"type": "res", "id": request_id, "ok": False, "error": str(exc)})
                 )
 
-    async def start(self) -> None:
+    async def start(self) -> int:
         if websockets is None:
             raise RuntimeError("websockets package is required")
         self._server = await websockets.serve(self._handle, self._host, self._port)
+        return self._server.sockets[0].getsockname()[1]
 
     async def stop(self) -> None:
         if self._server is not None:

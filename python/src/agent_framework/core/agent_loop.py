@@ -55,6 +55,10 @@ class DefaultAgentLoop:
             )
 
             for _ in range(self._deps.config.max_turns):
+                if request.cancel_event and request.cancel_event.is_set():
+                    await self._deps.hooks.emit({"type": "onRunEnd", "context": hook_context, "reason": {"kind": "cancelled"}})
+                    yield LifecycleEvent(phase="end", run_id=run_id)
+                    return
                 if self._deps.compactor:
                     history = await self._deps.compactor.compact(history, self._deps.config.token_budget)
                 _, messages = await self._deps.context_engine.build(

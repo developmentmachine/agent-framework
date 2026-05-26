@@ -21,9 +21,8 @@ export class InMemoryMemoryProvider implements MemoryProvider {
   }
 
   async search(query: string, limit = 10): Promise<MemoryEntry[]> {
-    const needle = query.toLowerCase();
     return [...this.store.values()]
-      .filter((entry) => entry.key.toLowerCase().includes(needle) || entry.value.toLowerCase().includes(needle))
+      .filter((entry) => matchesMemoryQuery(entry, query))
       .sort((a, b) => a.key.localeCompare(b.key))
       .slice(0, limit);
   }
@@ -39,4 +38,16 @@ export class InMemoryMemoryProvider implements MemoryProvider {
       }
     }
   }
+}
+
+
+function matchesMemoryQuery(entry: MemoryEntry, query: string): boolean {
+  const needle = query.toLowerCase();
+  const key = entry.key.toLowerCase();
+  const value = entry.value.toLowerCase();
+  if (key.includes(needle) || value.includes(needle) || (key.length > 0 && needle.includes(key))) {
+    return true;
+  }
+  const tokens = needle.split(/\s+/).filter((token) => token.length > 2);
+  return tokens.some((token) => key.includes(token) || value.includes(token));
 }
