@@ -184,6 +184,28 @@ program
     await new Promise<void>(() => undefined);
   });
 
+program
+  .command('webhook')
+  .description('Start the HTTP webhook surface')
+  .option('--host <host>', 'Bind host', '127.0.0.1')
+  .option('--port <port>', 'Bind port', '8787')
+  .option('--path <path>', 'Webhook path', '/webhook')
+  .action(async (cmd) => {
+    const globals = program.opts<{ workspace: string; provider: string; model: string; dataDir: string }>();
+    const { WebhookSurface } = await import('@agent-framework/core');
+    const runtime = buildRuntime(globals);
+    const surface = new WebhookSurface({
+      runtime,
+      host: cmd.host,
+      port: Number(cmd.port),
+      path: cmd.path,
+    });
+    await surface.start();
+    process.stdout.write(`Webhook listening on http://${cmd.host}:${cmd.port}${cmd.path}\n`);
+    await new Promise<void>(() => undefined);
+  });
+
+
 program.parseAsync(process.argv).catch((error: unknown) => {
   const message = error instanceof Error ? error.message : String(error);
   process.stderr.write(`${message}\n`);

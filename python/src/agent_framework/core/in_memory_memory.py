@@ -23,10 +23,15 @@ class InMemoryMemoryProvider:
         }
 
     async def search(self, query: str, limit: int = 10) -> list[dict[str, str]]:
-        needle = query.lower()
-        results = [
-            entry
-            for entry in self._store.values()
-            if needle in entry["key"].lower() or needle in entry["value"].lower()
-        ]
+        results = [entry for entry in self._store.values() if _matches_memory_query(entry, query)]
         return sorted(results, key=lambda item: item["key"])[:limit]
+
+
+def _matches_memory_query(entry: dict[str, str], query: str) -> bool:
+    needle = query.lower()
+    key = entry["key"].lower()
+    value = entry["value"].lower()
+    if needle in key or needle in value or (key and key in needle):
+        return True
+    tokens = [token for token in needle.split() if len(token) > 2]
+    return any(token in key or token in value for token in tokens)

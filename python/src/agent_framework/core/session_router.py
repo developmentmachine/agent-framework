@@ -4,7 +4,7 @@ import asyncio
 from datetime import datetime, timezone
 from typing import AsyncIterator
 
-from agent_framework.core.contracts import AgentLoop, EventBus, RunManager, SessionLane, StreamEvent
+from agent_framework.core.contracts import AgentLoop, EventBus, LifecycleEvent, RunManager, SessionLane, StreamEvent
 from agent_framework.core.domain import AgentRunRequest
 
 
@@ -22,10 +22,14 @@ class DefaultSessionRouter:
         queue: asyncio.Queue[StreamEvent | None] = asyncio.Queue()
 
         async def producer() -> None:
-            async for event in self._loop.run(request):
-                self._bus.publish(event)
-                await queue.put(event)
-            await queue.put(None)
+            try:
+                async for event in self._loop.run(request):
+                    self._bus.publish(event)
+                    await queue.put(event)
+            except Exception as exc:  # noqa: BLE001
+                await queue.put(LifecycleEvent(phase="error", run_id=run.run_id, error=str(exc)))
+            finally:
+                await queue.put(None)
 
         async def run_in_lane() -> None:
             await producer()

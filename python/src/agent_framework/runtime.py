@@ -5,6 +5,7 @@ from typing import Any
 
 from agent_framework.core.agent_loop import DefaultAgentLoop
 from agent_framework.core.context_engine import WorkspaceContextEngine
+from agent_framework.core.memory_context_engine import MemoryAugmentedContextEngine
 from agent_framework.core.context_compactor import TruncateMiddleCompactor
 from agent_framework.core.contracts import (
     AgentLoop,
@@ -72,7 +73,8 @@ def create_agent_runtime(
     resolved_memory = memory or InMemoryMemoryProvider()
     resolved_hooks = hooks or DefaultHookRunner()
     resolved_policy = policy or DefaultPermissionPolicy(DEFAULT_CODING_POLICY_RULES)
-    context_engine = WorkspaceContextEngine(resolved_config.workspace_root)
+    base_context_engine = WorkspaceContextEngine(resolved_config.workspace_root)
+    context_engine = MemoryAugmentedContextEngine(base_context_engine, resolved_memory)
     resolved_compactor = compactor or TruncateMiddleCompactor()
     lane = DefaultSessionLane()
     runs = DefaultRunManager()

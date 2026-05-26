@@ -13,7 +13,7 @@ export interface WebhookSurfaceOptions {
 export class WebhookSurface {
   constructor(private readonly options: WebhookSurfaceOptions) {}
 
-  start(): Promise<void> {
+  start(): Promise<number> {
     const path = this.options.path ?? '/webhook';
     const server = createServer(async (req, res) => {
       if (req.method !== 'POST' || req.url !== path) {
@@ -56,7 +56,11 @@ export class WebhookSurface {
     const port = this.options.port ?? 8787;
 
     return new Promise((resolve) => {
-      server.listen(port, host, () => resolve());
+      server.listen(port, host, () => {
+        const address = server.address();
+        const boundPort = typeof address === "object" && address ? address.port : port;
+        resolve(boundPort);
+      });
     });
   }
 }

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Literal, TypedDict, Union
@@ -58,6 +60,7 @@ class AgentRunRequest:
     session_id: str
     input: UserMessage
     mode: AgentMode = "agent"
+    cancel_event: asyncio.Event | None = None
 
 
 @dataclass

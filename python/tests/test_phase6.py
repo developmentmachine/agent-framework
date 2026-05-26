@@ -83,8 +83,7 @@ def test_python_gateway_tools_list():
     gateway = AgentGateway(runtime, port=0)
 
     async def _run():
-        await gateway.start()
-        port = gateway._server.sockets[0].getsockname()[1]
+        port = await gateway.start()
         async with websockets.connect(f"ws://127.0.0.1:{port}") as ws:
             await ws.send(json.dumps({"type": "req", "id": "1", "method": "connect", "params": {}}))
             connect = json.loads(await ws.recv())

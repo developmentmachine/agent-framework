@@ -36,12 +36,13 @@ class WebhookSurface:
         self._options = options
         self._server: asyncio.AbstractServer | None = None
 
-    async def start(self) -> None:
+    async def start(self) -> int:
         self._server = await asyncio.start_server(
             self._handle_client,
             self._options.host,
             self._options.port,
         )
+        return self._server.sockets[0].getsockname()[1]
 
     async def stop(self) -> None:
         if self._server is not None:

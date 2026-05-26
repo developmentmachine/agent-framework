@@ -19,6 +19,7 @@ import type {
 import { DefaultAgentLoop } from './agent-loop.js';
 import { TruncateMiddleCompactor } from './context-compactor.js';
 import { WorkspaceContextEngine } from './context-engine.js';
+import { MemoryAugmentedContextEngine } from './memory-context-engine.js';
 import { InMemoryEventBus } from './event-bus.js';
 import { DefaultHookRunner } from './hook-runner.js';
 import { InMemoryMemoryProvider } from './in-memory-memory.js';
@@ -80,7 +81,11 @@ export function createAgentRuntime(
   const hooks = options.hooks ?? new DefaultHookRunner();
   const policy = options.policy ?? new DefaultPermissionPolicy(DEFAULT_CODING_POLICY_RULES);
   const compactor = options.compactor ?? new TruncateMiddleCompactor();
-  const contextEngine = new WorkspaceContextEngine({ workspaceRoot: config.workspaceRoot });
+  const baseContextEngine = new WorkspaceContextEngine({ workspaceRoot: config.workspaceRoot });
+  const contextEngine = new MemoryAugmentedContextEngine({
+    inner: baseContextEngine,
+    memory,
+  });
   const lane = new DefaultSessionLane();
   const runs = new DefaultRunManager();
   const bus = new InMemoryEventBus();

@@ -114,8 +114,8 @@ def gateway_command(
             watcher = PluginWatcher(runtime, search_paths=[plugin_path])
             await watcher.start()
         gateway = AgentGateway(runtime, host=host, port=port)
-        await gateway.start()
-        typer.echo(f"Gateway listening on ws://{host}:{port}")
+        bound_port = await gateway.start()
+        typer.echo(f"Gateway listening on ws://{host}:{bound_port}")
         await asyncio.Event().wait()
 
     asyncio.run(_main())
@@ -141,6 +141,60 @@ def cron_command(
 
     asyncio.run(_main())
 
+
+
+@app.command("chat")
+def chat_command(
+    workspace: str = typer.Option("."),
+    provider: str = typer.Option("mock"),
+    model: str = typer.Option("gpt-4o-mini"),
+    session: str = typer.Option("default"),
+    data_dir: str = typer.Option(".agent-data", "--data-dir"),
+):
+    runtime = _runtime(workspace, provider, model, data_dir)
+
+    async def _main() -> None:
+        typer.echo("agent-framework chat (Ctrl+D to exit)")
+        while True:
+            try:
+                line = await asyncio.to_thread(input, "> ")
+            except EOFError:
+                break
+            if not line.strip():
+                continue
+            async for event in runtime.router.route(
+                AgentRunRequest(session_id=session, input={"role": "user", "content": line})
+            ):
+                if event.type == "assistant":
+                    typer.echo(event.delta, nl=False)
+                elif event.type == "tool":
+                    typer.echo(f"\n[tool:{event.name}] {event.status}")
+            typer.echo("")
+
+    asyncio.run(_main())
+
+
+@app.command("webhook")
+def webhook_command(
+    host: str = typer.Option("127.0.0.1"),
+    port: int = typer.Option(8787),
+    path: str = typer.Option("/webhook"),
+    workspace: str = typer.Option("."),
+    provider: str = typer.Option("mock"),
+    model: str = typer.Option("gpt-4o-mini"),
+    data_dir: str = typer.Option(".agent-data", "--data-dir"),
+):
+    from agent_framework.core.webhook_surface import WebhookSurface, WebhookSurfaceOptions
+
+    runtime = _runtime(workspace, provider, model, data_dir)
+
+    async def _main() -> None:
+        surface = WebhookSurface(WebhookSurfaceOptions(runtime=runtime, host=host, port=port, path=path))
+        await surface.start()
+        typer.echo(f"Webhook listening on http://{host}:{port}{path}")
+        await asyncio.Event().wait()
+
+    asyncio.run(_main())
 
 if __name__ == "__main__":
     app()
